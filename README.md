@@ -1,6 +1,6 @@
 # Mandelbrot Explorer
 
-![madnelbrot](mandelbrot.png)
+![Mandelbrot](mandelbrot.png)
 
 An interactive Mandelbrot Set explorer in Java.
 
