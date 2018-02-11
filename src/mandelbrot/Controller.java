@@ -210,7 +210,7 @@ public class Controller {
         {
             SpringLayout spring = new SpringLayout();
             row3.setLayout(spring);
-            tfName = new TextField("madnelbrot.png", COLUMN_COUNT);
+            tfName = new TextField("mandelbrot.png", COLUMN_COUNT);
             tfName.addActionListener(listener);
             Button btnSave = new Button("save");
             btnSave.setActionCommand(ACTION_SAVE);
