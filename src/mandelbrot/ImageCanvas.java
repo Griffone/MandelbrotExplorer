@@ -45,7 +45,8 @@ public class ImageCanvas extends Canvas {
     public void setImage(Image image) {
         this.image = image;
         x = y = 0;
-        update(null);
+        if (image != null)
+            update(null);
     }
     
     public void setRectShown(boolean shown) {
