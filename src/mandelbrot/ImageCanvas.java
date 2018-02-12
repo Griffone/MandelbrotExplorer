@@ -18,6 +18,7 @@ import java.awt.image.BufferStrategy;
 public class ImageCanvas extends Canvas {
     
     private Image image;
+    
     private int x = 0, y = 0;
     
     private int rx = 0, ry = 0, rw = 0, rh = 0;
@@ -35,6 +36,12 @@ public class ImageCanvas extends Canvas {
         createBufferStrategy(2);
     }
     
+    public void pan(int dx, int dy) {
+        x += dx;
+        y += dy;
+        update(null);
+    }
+    
     public void setImage(Image image) {
         this.image = image;
         x = y = 0;
@@ -46,17 +53,12 @@ public class ImageCanvas extends Canvas {
         update(null);
     }
     
-    public void updateRect(int x0, int y0, int x1, int y1) {
-        rx = Math.min(x0, x1);
-        ry = Math.min(y0, y1);
-        rw = Math.max(x0, x1) - rx;
-        rh = Math.max(y0, y1) - ry;
-    }
-    
-    public void pan(int deltaX, int deltaY) {
-        x += deltaX;
-        y += deltaY;
-        update(null);
+    public void updateRect(int x, int y, int width, int height) {
+        rx = x;
+        ry = y;
+        rw = width;
+        rh = height;
+        setRectShown(true);
     }
     
     @Override
@@ -70,8 +72,12 @@ public class ImageCanvas extends Canvas {
         g = bs.getDrawGraphics();
         g.clearRect(0, 0, getWidth(), getHeight());
         g.drawImage(image, x, y, null);
-        if (showRect)
+        if (showRect) {
+            g.setColor(new Color(0, 128, 128, 128));
+            g.fillRect(rx, ry, rw, rh);
+            g.setColor(new Color(32, 178, 170));
             g.drawRect(rx, ry, rw, rh);
+        }
         bs.show();
     }
 }

@@ -1,0 +1,6 @@
+[ ] - Finalize Controller controls
+[ ] - Add settings flow
+[ ] - Use GPU to render images
+[ ] - Disjoint rendering and showing threads
+[ ] - Add gradient support
+[ ] - Add statistical coloring

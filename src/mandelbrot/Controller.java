@@ -7,6 +7,7 @@ package mandelbrot;
 
 import java.awt.Button;
 import java.awt.Color;
+import java.awt.Component;
 import java.awt.Frame;
 import java.awt.Insets;
 import java.awt.Label;
@@ -17,6 +18,10 @@ import java.awt.event.ActionListener;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseWheelEvent;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
+import java.awt.event.WindowListener;
+import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
 import java.util.logging.Level;
@@ -33,15 +38,21 @@ public class Controller {
     
     static Frame explorer, controller, pallete;
     static ImageCanvas imgCanvas;
-    
-    public static final int DEFAULT_WIDTH = 1280;
-    public static final int DEFAULT_HEIGHT = 720;
+    static Mandelbrot mandelbrot;
+    static MandelbrotDrawer drawer;
     
     public static final int SIDE_PADDING = 5;
     public static final int PADDING = 5;
     public static final int COLUMN_COUNT = 16;
     
-    public static final double WHEEL_STEP = 1.03125;
+    public static final int DEFAULT_WIDTH = 1280, DEFAULT_HEIGHT = 720, DEFAULT_MAX_DEPTH = 64;
+    public static final double DEFAULT_X = -2.0/3.0, DEFAULT_Y = 0.0, DEFAULT_SPAN = 3.0;
+    public static final double WHEEL_STEP = 1.125;
+    
+    public static final String DEFAULT_NAME = "mandelbrot.png";
+    public static final String IMAGE_PATH_PREFIX = "images/";
+    public static final String DEFAULT_EXTENSION = ".png";
+    public static final int DEFAULT_SCREENSHOT_WIDTH = 1920, DEFAULT_SCREENSHOT_HEIGHT = 1080;
     
     public static final String ACTION_EDIT_X            = "EX";
     public static final String ACTION_EDIT_Y            = "EY";
@@ -56,51 +67,55 @@ public class Controller {
     public static final String ACTION_SAVE_COORDS       = "SC";
     public static final String ACTION_LOAD_COORDS       = "LC";
     
-    static MutableDouble x = new MutableDouble(-1), y = new MutableDouble(0), span = new MutableDouble(4);
-    static MutableInteger depth = new MutableInteger(64);
-    
     static TextField tfX, tfY, tfSpan, tfDepth, tfName;
     
     public static void main(String[] args) {
+        mandelbrot = new Mandelbrot(DEFAULT_WIDTH, DEFAULT_HEIGHT, DEFAULT_X, DEFAULT_Y, DEFAULT_SPAN, DEFAULT_MAX_DEPTH);
         initializeExplorer();
         initializeController();
         
         explorer.setLocation(120, 120);
         controller.setLocation(explorer.getWidth() + 240, 120);
-    }
-    
-    public static void translateXY(int dx, int dy, boolean generateNewImage) {
-        int width = imgCanvas.getWidth();
-        int height = imgCanvas.getHeight();
-        double nx = x.getValue() - (dx * span.getValue() / (double) width);
-        double ny = y.getValue() - (dy * span.getValue() / (double) width);
-        x.setValue(nx);
-        y.setValue(ny);
-        if (generateNewImage)
-            imgCanvas.setImage(Mandelbrot.generate(width, height, x.getValue(), y.getValue(), span.getValue(), depth.getValue()));
-    }
-    
-    public static void translateXY(int dx, int dy) {
-        translateXY(dx, dy, true);
+        
+        drawer = new MandelbrotDrawer(mandelbrot, imgCanvas);
+        Thread drawThread = new Thread(drawer);
+        drawThread.setDaemon(true);
+        mandelbrot.setSpan(DEFAULT_SPAN);
+        drawThread.start();
+        imgCanvas.setImage(mandelbrot.generate());
     }
     
     public static void zoom(int dz) {
-        span.setValue(span.getValue() * Math.pow(WHEEL_STEP, dz));
-        imgCanvas.setImage(Mandelbrot.generate(imgCanvas.getWidth(), imgCanvas.getHeight(), x.getValue(), y.getValue(), span.getValue(), depth.getValue()));
+        mandelbrot.setSpan(mandelbrot.getSpan() * Math.pow(WHEEL_STEP, dz));
+        tfSpan.setText(Double.toString(mandelbrot.getSpan()));
+        drawer.updateImage();
     }
     
-    public static void enhance(int left, int top, int right, int bottom) {
-        int imgWidth = imgCanvas.getWidth();
-        int imgHeight = imgCanvas.getHeight();
-        int width = right - left;
-        int height = bottom - top;
-        int ox = imgWidth / 2;
-        int oy = imgHeight / 2;
-        int nx = (left + right) / 2;
-        int ny = (top + bottom) / 2;
-        translateXY(nx - ox, ny - oy, false);
-        span.setValue(span.getValue() * (double) width / (double) imgWidth);
-        imgCanvas.setImage(Mandelbrot.generate(imgCanvas.getWidth(), imgCanvas.getHeight(), x.getValue(), y.getValue(), span.getValue(), depth.getValue()));
+    public static void updateRect(int x0, int x1, int beginY, int y) {
+        int x = Math.min(x0, x1);
+        int width = Math.abs(x0 - x1);
+        int height = width * imgCanvas.getHeight() / imgCanvas.getWidth();
+        if (beginY > y)
+            beginY -= height;
+        imgCanvas.updateRect(x, beginY, width, height);
+    }
+    
+    public static void enhance(int x0, int x1, int beginY, int y) {
+        int x = Math.min(x0, x1);
+        int width = Math.abs(x0 - x1);
+        int height = width * imgCanvas.getHeight() / imgCanvas.getWidth();
+        if (beginY > y)
+            beginY -= height;
+        double span = mandelbrot.getSpan() * (double) width / (double) imgCanvas.getWidth();
+        // calculate new center
+        int dx = x + width / 2 - imgCanvas.getWidth() / 2;
+        int dy = beginY + height / 2 - imgCanvas.getHeight() / 2;
+        mandelbrot.moveTarget(-dx, -dy);
+        mandelbrot.setSpan(span);
+        tfX.setText(Double.toString(mandelbrot.getX()));
+        tfY.setText(Double.toString(mandelbrot.getY()));
+        tfSpan.setText(Double.toString(span));
+        drawer.updateImage();
     }
     
     private static void initializeExplorer() {
@@ -111,11 +126,13 @@ public class Controller {
         explorer.setSize(DEFAULT_WIDTH + insets.left + insets.right, DEFAULT_HEIGHT + insets.top + insets.bottom);
         explorer.add(imgCanvas);
         imgCanvas.initializeBuffers();
-        imgCanvas.setImage(Mandelbrot.generate(DEFAULT_WIDTH, DEFAULT_HEIGHT, x.getValue(), y.getValue(), span.getValue(), depth.getValue()));
+        
         MouseListener ml = new MouseListener();
+        
         imgCanvas.addMouseListener(ml);
         imgCanvas.addMouseMotionListener(ml);
         imgCanvas.addMouseWheelListener(ml);
+        explorer.addWindowListener(new CloseWindowListener());
     }
     
     private static void initializeController() {
@@ -136,13 +153,13 @@ public class Controller {
             Label labelX = new Label("X:");
             Label labelY = new Label("Y:");
             tfX = new TextField(COLUMN_COUNT);
-            tfX.setText(Double.toString(x.getValue()));
-            KeyListener kl = new KeyListener(tfX, x);
-            kl.connect();
+            tfX.setName(ACTION_EDIT_X);
+            tfX.addActionListener(listener);
+            tfX.setText(Double.toString(mandelbrot.getX()));
             tfY = new TextField(COLUMN_COUNT);
-            tfY.setText(Double.toString(y.getValue()));
-            kl = new KeyListener(tfY, y);
-            kl.connect();
+            tfY.setName(ACTION_EDIT_Y);
+            tfY.addActionListener(listener);
+            tfY.setText(Double.toString(mandelbrot.getY()));
             row0.add(labelX);
             row0.add(labelY);
             row0.add(tfX);
@@ -161,14 +178,14 @@ public class Controller {
             SpringLayout spring = new SpringLayout();
             row1.setLayout(spring);
             Button btnIncreaseSpan = new Button("x1.5");
-            btnIncreaseSpan.setActionCommand(ACTION_INCREASE_SPAN);
+            btnIncreaseSpan.setName(ACTION_INCREASE_SPAN);
             btnIncreaseSpan.addActionListener(listener);
             tfSpan = new TextField(COLUMN_COUNT);
-            tfSpan.setText(Double.toString(span.getValue()));
-            KeyListener kl = new KeyListener(tfSpan, span);
-            kl.connect();
+            tfSpan.setName(ACTION_EDIT_SPAN);
+            tfSpan.addActionListener(listener);
+            tfSpan.setText(Double.toString(mandelbrot.getSpan()));
             Button btnReduceSpan = new Button("/1.5");
-            btnReduceSpan.setActionCommand(ACTION_REDUCE_SPAN);
+            btnReduceSpan.setName(ACTION_REDUCE_SPAN);
             btnReduceSpan.addActionListener(listener);
             row1.add(btnIncreaseSpan);
             row1.add(tfSpan);
@@ -186,14 +203,14 @@ public class Controller {
             SpringLayout spring = new SpringLayout();
             row2.setLayout(spring);
             Button btnDecreaseDepth = new Button("/2");
-            btnDecreaseDepth.setActionCommand(ACTION_REDUCE_DEPTH);
+            btnDecreaseDepth.setName(ACTION_REDUCE_DEPTH);
             btnDecreaseDepth.addActionListener(listener);
             tfDepth = new TextField(COLUMN_COUNT);
-            tfDepth.setText(Integer.toString(depth.getValue()));
-            KeyListener kl = new KeyListener(tfDepth, depth);
-            kl.connect();
+            tfDepth.setName(ACTION_EDIT_DEPTH);
+            tfDepth.addActionListener(listener);
+            tfDepth.setText(Integer.toString(mandelbrot.getMaxDepth()));
             Button btnIncreaseDepth = new Button("x2");
-            btnIncreaseDepth.setActionCommand(ACTION_INCREASE_DEPTH);
+            btnIncreaseDepth.setName(ACTION_INCREASE_DEPTH);
             btnIncreaseDepth.addActionListener(listener);
             row2.add(btnDecreaseDepth);
             row2.add(tfDepth);
@@ -211,9 +228,11 @@ public class Controller {
             SpringLayout spring = new SpringLayout();
             row3.setLayout(spring);
             tfName = new TextField("mandelbrot.png", COLUMN_COUNT);
+            tfName.setName(ACTION_EDIT_NAME);
             tfName.addActionListener(listener);
+            tfName.setName(DEFAULT_NAME);
             Button btnSave = new Button("save");
-            btnSave.setActionCommand(ACTION_SAVE);
+            btnSave.setName(ACTION_SAVE);
             btnSave.addActionListener(listener);
             row3.add(tfName);
             row3.add(btnSave);
@@ -229,10 +248,10 @@ public class Controller {
             SpringLayout spring = new SpringLayout();
             row4.setLayout(spring);
             Button btnSaveCoords = new Button("save coords");
-            btnSaveCoords.setActionCommand(ACTION_SAVE_COORDS);
+            btnSaveCoords.setName(ACTION_SAVE_COORDS);
             btnSaveCoords.addActionListener(listener);
             Button btnLoadCoords = new Button("load coords");
-            btnLoadCoords.setActionCommand(ACTION_LOAD_COORDS);
+            btnLoadCoords.setName(ACTION_LOAD_COORDS);
             btnLoadCoords.addActionListener(listener);
             row4.add(btnSaveCoords);
             row4.add(btnLoadCoords);
@@ -273,6 +292,7 @@ public class Controller {
         Insets insets = controller.getInsets();
         width += insets.left + insets.right + 2 * SIDE_PADDING;
         controller.setSize(width, controller.getHeight());
+        controller.addWindowListener(new CloseWindowListener());
     }
     
     static class MouseListener extends MouseAdapter {
@@ -289,6 +309,8 @@ public class Controller {
                 dragEnabled = true;
                 lastX = beginX = e.getX();
                 lastY = beginY = e.getY();
+                enhancing = false;
+                imgCanvas.setRectShown(false);
             } else if (e.getButton() == MouseEvent.BUTTON1) {
                 enhanceX = lastX = e.getX();
                 enhanceY = lastY = e.getY();
@@ -300,22 +322,23 @@ public class Controller {
         public void mouseReleased(MouseEvent e) {
             if (e.getButton() == MouseEvent.BUTTON3&& dragEnabled) {
                 dragEnabled = false;
-                translateXY(e.getX() - beginX, -(e.getY() - beginY));
+                mandelbrot.moveTarget(e.getX() - beginX, e.getY() - beginY);
+                drawer.updateImage();
+                tfX.setText(Double.toString(mandelbrot.getX()));
+                tfY.setText(Double.toString(mandelbrot.getY()));
             } else if (e.getButton() == MouseEvent.BUTTON1 && enhancing) {
-                int ex = e.getX();
-                int ey = e.getY();
                 enhancing = false;
                 imgCanvas.setRectShown(false);
-                enhance(Math.min(ex, enhanceX), Math.min(ey, enhanceY), Math.max(ex, enhanceX), Math.max(ey, enhanceY));
+                enhance(enhanceX, e.getX(), enhanceY, e.getY());
             }
         }
         
         @Override
         public void mouseDragged(MouseEvent e) {
             if (dragEnabled) {
-                imgCanvas.pan(e.getX() - lastX, e.getY() - lastY);
+                imgCanvas.pan(e.getX()- lastX, e.getY() - lastY);
             } else if (enhancing) {
-                imgCanvas.updateRect(enhanceX, enhanceY, e.getX(), e.getY());
+                updateRect(enhanceX, e.getX(), enhanceY, e.getY());
                 imgCanvas.setRectShown(true);
             }
             lastX = e.getX();
@@ -326,10 +349,14 @@ public class Controller {
         public void mouseExited(MouseEvent e) {
             if (dragEnabled) {
                 dragEnabled = false;
-                translateXY(e.getX() - beginX, -(e.getY() - beginY));
+                mandelbrot.moveTarget(e.getX() - beginX, e.getY() - beginY);
+                drawer.updateImage();
+                tfX.setText(Double.toString(mandelbrot.getX()));
+                tfY.setText(Double.toString(mandelbrot.getY()));
             } else if (enhancing) {
                 enhancing = false;
                 imgCanvas.setRectShown(false);
+                enhance(enhanceX, e.getX(), enhanceY, e.getY());
             }
         }
         
@@ -343,109 +370,52 @@ public class Controller {
 
         @Override
         public void actionPerformed(ActionEvent e) {
-            String cmd = e.getActionCommand();
+            String action = ((Component) e.getSource()).getName();
             
-            switch (cmd) {
-                case ACTION_EDIT_X:
-                    
-                    break;
-                    
-                case ACTION_EDIT_Y:
-                    
-                    break;
-                    
-                case ACTION_REDUCE_SPAN:
-                    
-                    break;
-                    
-                case ACTION_EDIT_SPAN:
-                    
-                    break;
-                    
-                case ACTION_INCREASE_SPAN:
-                    
-                    break;
-                    
-                case ACTION_REDUCE_DEPTH:
-                    depth.setValue(depth.getValue() / 2);
-                    tfDepth.setText(Integer.toString(depth.getValue()));
-                    zoom(0);
-                    break;
-                    
-                case ACTION_EDIT_DEPTH:
-                    
-                    break;
-                    
-                case ACTION_INCREASE_DEPTH:
-                    depth.setValue(depth.getValue() * 2);
-                    tfDepth.setText(Integer.toString(depth.getValue()));
-                    zoom(0);
-                    break;
-                        
-                case ACTION_EDIT_NAME:
-                    
-                    break;
-                    
-                case ACTION_SAVE:
-                    String name = tfName.getText();
-                    if (name.length() <= 0)
-                        System.err.println("Need a name!");
-                    else if (!name.contains("."))
-                        System.err.println("Name needs an extension.");
-                    else {
-                        try {
-                            String subs[] = name.split("\\.");
-                            ImageIO.write(Mandelbrot.generate(1920, 1080, x.getValue(), y.getValue(), span.getValue(), depth.getValue()), subs[subs.length - 1], new File(name));
-                        } catch (IOException ex) {
-                            System.err.println("Failed to save image!");
-                        }
+            switch (action) {
+                case ACTION_REDUCE_DEPTH: {
+                    int md = mandelbrot.getMaxDepth() / 2;
+                    mandelbrot.setMaxDepth(md);
+                    tfDepth.setText(Integer.toString(md));
+                    drawer.updateImage();
+                } break;
+                
+                case ACTION_INCREASE_DEPTH: {
+                    int md = mandelbrot.getMaxDepth() * 2;
+                    mandelbrot.setMaxDepth(md);
+                    tfDepth.setText(Integer.toString(md));
+                    drawer.updateImage();
+                } break;
+                
+                case ACTION_SAVE: {
+                    String name = tfName.getName();
+                    if (!name.contains(".")) {
+                        System.err.println("No extensioin was provided generating new one.");
+                        name = name + ".png";
+                        tfName.setName(name);
                     }
-                    break;
-                    
-                case ACTION_SAVE_COORDS:
-                    
-                    break;
-                    
-                case ACTION_LOAD_COORDS:
-                    
-                    break;
+                    String subs[] = name.split("\\.");
+                    try {
+                        ImageIO.write(mandelbrot.generate(DEFAULT_SCREENSHOT_WIDTH, DEFAULT_SCREENSHOT_HEIGHT), subs[subs.length - 1], new File(IMAGE_PATH_PREFIX + name));
+                    } catch (IOException ex) {
+                        System.err.println("Error saving " + name);
+                    }
+                } break;
                     
                 default:
-                    System.err.print("Uknown command: ");
-                    System.err.println(cmd);
+                    System.err.print("Unsupported command: ");
+                    System.err.println(action);
                     break;
             }
         }
-        
     }
     
-    static class KeyListener implements ActionListener {
+    static class CloseWindowListener extends WindowAdapter {
 
-        private MutableDouble refDouble = null;
-        private MutableInteger refInteger = null;
-        private final TextField textField;
-        
-        public KeyListener(TextField field, MutableDouble value) {
-            this.textField = field;
-            this.refDouble = value;
-        }
-        
-        public KeyListener(TextField field, MutableInteger value) {
-            this.textField = field;
-            this.refInteger = value;
-        }
-        
-        public void connect() {
-            this.textField.addActionListener(this);
-        }
-        
         @Override
-        public void actionPerformed(ActionEvent e) {
-            if (refDouble != null) {
-                refDouble.setValue(Double.valueOf(textField.getText()));
-            } else {
-                refInteger.setValue(Integer.valueOf(textField.getText()));
-            }
+        public void windowClosing(WindowEvent e) {
+            controller.dispose();
+            explorer.dispose();
         }
         
     }
