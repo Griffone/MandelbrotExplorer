@@ -24,6 +24,7 @@ public class MandelbrotDrawer implements Runnable {
     
     public void updateImage() {
         synchronized(mandelbrot) {
+            mandelbrot.invalidate();
             mandelbrot.notify();
         }
     }

@@ -20,12 +20,8 @@ import java.awt.event.MouseEvent;
 import java.awt.event.MouseWheelEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
-import java.awt.event.WindowListener;
-import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import javax.imageio.ImageIO;
 import javax.swing.SpringLayout;
 
@@ -53,6 +49,8 @@ public class Controller {
     public static final String IMAGE_PATH_PREFIX = "images/";
     public static final String DEFAULT_EXTENSION = ".png";
     public static final int DEFAULT_SCREENSHOT_WIDTH = 1920, DEFAULT_SCREENSHOT_HEIGHT = 1080;
+    
+    public static final int MIN_ENHANCE_WIDTH = 64;
     
     public static final String ACTION_EDIT_X            = "EX";
     public static final String ACTION_EDIT_Y            = "EY";
@@ -104,6 +102,8 @@ public class Controller {
         int x = Math.min(x0, x1);
         int width = Math.abs(x0 - x1);
         int height = width * imgCanvas.getHeight() / imgCanvas.getWidth();
+        if (width < MIN_ENHANCE_WIDTH)
+            return;
         if (beginY > y)
             beginY -= height;
         double span = mandelbrot.getSpan() * (double) width / (double) imgCanvas.getWidth();

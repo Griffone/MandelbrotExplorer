@@ -20,6 +20,7 @@ public class Mandelbrot {
     
     private int width = 0, height = 0, maxDepth = 0;
     private double left = 0, top = 0, x = 0, y = 0, span = 1;
+    private boolean invalid = false;
     
     public Mandelbrot() {}
     public Mandelbrot(int width, int height, double x, double y, double span, int maxDepth) {
@@ -99,17 +100,28 @@ public class Mandelbrot {
     public synchronized int getMaxDepth() {
         return maxDepth;
     }
+    
+    public void invalidate() {
+        invalid = true;
+    }
 
     public BufferedImage generate() {
-        return generate(width, height);
+        return generate(width, height, left, top, span, maxDepth);
     }
     
     public BufferedImage generate(int width, int height) {
+        return generate(width, height, left, top, span, maxDepth);
+    }
+    
+    public BufferedImage generate(int width, int height, double left, double top, double span, int maxDepth) {
+        invalid = false;
         BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
         double step = span / width;
         
         for (int row = 0; row < height; row++) {
             for (int col = 0; col < width; col++) {
+                if (invalid)
+                    return null;
                 double cr = left + step * col;
                 double ci = top - step * row;
                 
