@@ -388,11 +388,11 @@ public class Controller {
                 } break;
                 
                 case ACTION_SAVE: {
-                    String name = tfName.getName();
+                    String name = tfName.getText();
                     if (!name.contains(".")) {
                         System.err.println("No extensioin was provided generating new one.");
                         name = name + ".png";
-                        tfName.setName(name);
+                        tfName.setText(name);
                     }
                     String subs[] = name.split("\\.");
                     try {
